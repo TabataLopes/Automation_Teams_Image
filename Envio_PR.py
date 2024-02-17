@@ -1,33 +1,53 @@
 import requests
+import base64
+from dotenv import load_dotenv
+import os
 
-def enviar_imagem_para_teams(imagem_path, grupo_id, token):
-    url = f"https://graph.microsoft.com/v1.0/teams/{grupo_id}/channels/{canal_id}/messages"
+load_dotenv()
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+# Path da imagem no SharePoint
+image_url = os.getenv('IMG_PATH') 
 
-    with open(imagem_path, 'rb') as imagem_arquivo:
-        imagem_bytes = imagem_arquivo.read()
+# Lendo imagem transformando em bytes
+with open(image_url, "rb") as img_file:
+    img_bytes = img_file.read()
 
-    payload = {
-        "body": {
-            "contentType": "html",
-            "content": "<img src='data:image/jpeg;base64," + imagem_bytes.decode('utf-8') + "'/>"
+# Codifica os bytes da imagem em base64
+img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+
+# URL do seu webhook do Microsoft Teams
+webhook_url = os.getenv('WEBHOOK_URL')
+
+# Monta o Adaptive Card com a imagem
+adaptive_card_json = {
+    "type": "message",
+    "attachments": [
+        {
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": {
+                "type": "AdaptiveCard",
+                "body": [
+                    {
+                        "type": "Image",
+                        "url": f"data:image/png;base64,{img_base64}",
+                        "altText": "Descrição da Imagem"
+                    }
+                ],
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "version": "1.4"
+            }
         }
-    }
+    ]
+}
 
-    response = requests.post(url, headers=headers, json=payload)
+# Configura os cabeçalhos da solicitação para o Microsoft Teams
+headers = {"Content-Type": "application/json"}
 
-    if response.status_code == 201:
-        print("Imagem enviada com sucesso para o grupo Teams.")
-    else:
-        print("Falha ao enviar a imagem para o grupo Teams. Status code:", response.status_code)
+# Envia o Adaptive Card com a imagem para o webhook do Microsoft Teams
+response_teams = requests.post(webhook_url, json=adaptive_card_json, headers=headers, stream=True)
 
-# Exemplo de utilização
-imagem_path = "Caminho_para_sua_imagem_local/imagem.jpg"
-grupo_id = "/_#/conversations/48:notes?ctx=chat"
-token = "SEU_TOKEN_DE_AUTORIZACAO"
-
-enviar_imagem_para_teams(imagem_path, grupo_id, token)
+# Verifica se a solicitação para o Microsoft Teams foi bem-sucedida
+if response_teams.status_code == 200:
+    print("Adaptive Card com imagem do SharePoint enviado com sucesso para o webhook do Microsoft Teams.")
+else:
+    print("Falha ao enviar o Adaptive Card com imagem do SharePoint para o webhook do Microsoft Teams. Status code:", response_teams.status_code)
